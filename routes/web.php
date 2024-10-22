@@ -13,8 +13,22 @@ Route::get('/photo/merged', [PhotoController::class, 'showMergedPhoto']);
 
 Route::get('/test-mail', function () {
     $details = [
-        'subject' => 'Laravel Mail Test',
-        'body' => 'Bu, Laravel ile gönderilen test e-postasıdır.'
+        'subject' => 'Your Photo from Laneige The Grove Pop-up!',
+        'body' => '
+                <html>
+                <head>
+                <title>Your Photo from Laneige The Grove Pop-up!</title>
+                </head>
+                <body>
+                <p>Thanks for visiting our Laneige The Grove Pop-up!
+
+Enclosed please find your image from our photo booth!  Don\'t forget to tag and follow @laneige_us !
+
+            Hope you revisit us again soon!</p>
+                <img src="' . url('/photo/merged?id=16') . '" alt="Your Photo" />
+                </body>
+                </html>
+                '
     ];
 
     Mail::raw($details['body'], function ($message) use ($details) {
