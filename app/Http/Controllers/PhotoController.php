@@ -110,31 +110,52 @@ class PhotoController extends Controller
                 ], 404);
             }
 
+            // Debug için dosya yollarını loglayalım
+            \Log::info('Processing paths', [
+                'original_path' => $lastPhoto->path,
+                'storage_path' => storage_path(),
+                'public_path' => public_path(),
+            ]);
+
             // Arka plan fotoğrafının yolu
             $backgroundPath = public_path('background.png');
 
             // Dosyaların var olduğunu kontrol edelim
             if (!file_exists($backgroundPath)) {
-                throw new \Exception('Background image not found');
+                throw new \Exception('Background image not found at: ' . $backgroundPath);
             }
 
-            // Veritabanındaki yolu düzeltelim
-            // "public/photos/filename.jpg" -> "photos/filename.jpg"
-            $storagePath = str_replace('public/', '', $lastPhoto->path);
+            // Yüklenen fotoğrafın yolunu düzenleyelim
+            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
 
-            // Storage facade ile tam dosya yolunu alalım
-            $uploadedPhotoPath = Storage::path($storagePath);
-
-            if (!Storage::exists($storagePath)) {
-                throw new \Exception('Uploaded photo not found at path: ' . $storagePath);
+            // Dosyanın varlığını kontrol edelim ve alternatif yolları deneyelim
+            if (!file_exists($uploadedPhotoPath)) {
+                // Alternatif yol 1: Storage disk üzerinden
+                if (Storage::exists($lastPhoto->path)) {
+                    $uploadedPhotoPath = Storage::path($lastPhoto->path);
+                }
+                // Alternatif yol 2: Public disk üzerinden
+                else if (Storage::disk('public')->exists(basename($lastPhoto->path))) {
+                    $uploadedPhotoPath = Storage::disk('public')->path(basename($lastPhoto->path));
+                }
+                // Alternatif yol 3: Public klasöründen
+                else if (file_exists(public_path('storage/' . basename($lastPhoto->path)))) {
+                    $uploadedPhotoPath = public_path('storage/' . basename($lastPhoto->path));
+                }
+                else {
+                    throw new \Exception('Uploaded photo not found. Tried paths: ' .
+                        json_encode([
+                            'original' => $uploadedPhotoPath,
+                            'storage' => Storage::path($lastPhoto->path),
+                            'public_storage' => Storage::disk('public')->path(basename($lastPhoto->path)),
+                            'public' => public_path('storage/' . basename($lastPhoto->path))
+                        ])
+                    );
+                }
             }
 
-            // Debug bilgisi ekleyelim
-            \Log::info('Photo paths:', [
-                'storage_path' => $storagePath,
-                'full_path' => $uploadedPhotoPath,
-                'exists' => Storage::exists($storagePath)
-            ]);
+            // Debug için bulunan dosya yolunu loglayalım
+            \Log::info('Found photo at path', ['path' => $uploadedPhotoPath]);
 
             // Resimleri yükleyelim
             $background = $this->createImageFromFile($backgroundPath);
@@ -188,7 +209,14 @@ class PhotoController extends Controller
 
             // Yeni resmi kaydedelim
             $newFileName = 'merged_' . time() . '.png';
-            $newFilePath = Storage::path('public/photos/' . $newFileName);
+
+            // Yeni resmi public/storage altına kaydedelim
+            $newFilePath = public_path('storage/photos/' . $newFileName);
+
+            // Klasörün var olduğundan emin olalım
+            if (!file_exists(dirname($newFilePath))) {
+                mkdir(dirname($newFilePath), 0755, true);
+            }
 
             // PNG olarak kaydedelim
             imagepng($newImage, $newFilePath, 9);
@@ -201,17 +229,16 @@ class PhotoController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Photo merged successfully',
-                'url' => Storage::url('photos/' . $newFileName),
+                'url' => asset('storage/photos/' . $newFileName),
                 'debug' => [
                     'original_path' => $lastPhoto->path,
-                    'storage_path' => $storagePath,
-                    'full_path' => $uploadedPhotoPath
+                    'used_path' => $uploadedPhotoPath,
+                    'new_path' => $newFilePath
                 ]
             ]);
 
         } catch (\Exception $e) {
-            // Hata durumunda debug bilgisi ekleyelim
-            \Log::error('Photo merge error:', [
+            Log::error('Photo merge error:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
