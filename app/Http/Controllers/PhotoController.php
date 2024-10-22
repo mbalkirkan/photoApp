@@ -76,6 +76,27 @@ class PhotoController extends Controller
         }
     }
 
+    private function createImageFromFile($filePath)
+    {
+        // Dosya tipini kontrol et
+        $imageInfo = getimagesize($filePath);
+        if ($imageInfo === false) {
+            throw new \Exception('Invalid image file');
+        }
+
+        // MIME tipine göre uygun fonksiyonu kullan
+        switch ($imageInfo['mime']) {
+            case 'image/jpeg':
+                return imagecreatefromjpeg($filePath);
+            case 'image/png':
+                return imagecreatefrompng($filePath);
+            case 'image/gif':
+                return imagecreatefromgif($filePath);
+            default:
+                throw new \Exception('Unsupported image format: ' . $imageInfo['mime']);
+        }
+    }
+
     public function getLastPhotoMerged()
     {
         try {
@@ -90,28 +111,28 @@ class PhotoController extends Controller
             }
 
             // Arka plan fotoğrafının yolu
-            $backgroundPath = public_path('background.png'); // background.jpg'yi public klasörüne koymalısınız
+            $backgroundPath = public_path('background.png'); // PNG olarak değiştirildi
 
-            // Son yüklenen fotoğrafın yolu
+            // Dosyaların var olduğunu kontrol edelim
+            if (!file_exists($backgroundPath)) {
+                throw new \Exception('Background image not found');
+            }
+
             $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
+            if (!file_exists($uploadedPhotoPath)) {
+                throw new \Exception('Uploaded photo not found');
+            }
 
-            // Arka plan resmini yükleyelim
-            $background = imagecreatefromjpeg($backgroundPath);
+            // Resimleri yükleyelim
+            $background = $this->createImageFromFile($backgroundPath);
+            $uploadedPhoto = $this->createImageFromFile($uploadedPhotoPath);
 
-            // Yüklenen fotoğrafı yükleyelim (uzantıya göre)
-            $extension = pathinfo($uploadedPhotoPath, PATHINFO_EXTENSION);
-            $uploadedPhoto = null;
+            // PNG için alfa kanalını koruyalım
+            imagealphablending($background, true);
+            imagesavealpha($background, true);
 
-            switch(strtolower($extension)) {
-                case 'jpg':
-                case 'jpeg':
-                    $uploadedPhoto = imagecreatefromjpeg($uploadedPhotoPath);
-                    break;
-                case 'png':
-                    $uploadedPhoto = imagecreatefrompng($uploadedPhotoPath);
-                    break;
-                default:
-                    throw new \Exception('Unsupported image format');
+            if ($uploadedPhoto === false || $background === false) {
+                throw new \Exception('Failed to create image resource');
             }
 
             // Resimlerin boyutlarını alalım
@@ -121,16 +142,26 @@ class PhotoController extends Controller
             $upHeight = imagesy($uploadedPhoto);
 
             // Yüklenen fotoğrafı %70 oranında küçültelim
-            $newWidth = $upWidth * 0.7;
-            $newHeight = $upHeight * 0.7;
+            $newWidth = (int)($upWidth * 0.7);
+            $newHeight = (int)($upHeight * 0.7);
 
             // Merkez koordinatlarını hesaplayalım
-            $destX = ($bgWidth - $newWidth) / 2;
-            $destY = ($bgHeight - $newHeight) / 2;
+            $destX = (int)(($bgWidth - $newWidth) / 2);
+            $destY = (int)(($bgHeight - $newHeight) / 2);
 
-            // Resimleri birleştirelim
+            // Yeni boş resim oluşturalım
+            $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
+
+            // PNG için alfa kanalını ayarlayalım
+            imagealphablending($newImage, true);
+            imagesavealpha($newImage, true);
+
+            // Arka planı yeni resme kopyalayalım
+            imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
+
+            // Yüklenen fotoğrafı arka planın üzerine yerleştirelim
             imagecopyresampled(
-                $background,
+                $newImage,
                 $uploadedPhoto,
                 $destX,
                 $destY,
@@ -143,12 +174,14 @@ class PhotoController extends Controller
             );
 
             // Yeni resmi kaydedelim
-            $newFileName = 'merged_' . time() . '.jpg';
+            $newFileName = 'merged_' . time() . '.png';
             $newFilePath = storage_path('app/public/photos/' . $newFileName);
 
-            imagejpeg($background, $newFilePath, 90);
+            // PNG olarak kaydedelim
+            imagepng($newImage, $newFilePath, 9); // 9 = en iyi sıkıştırma
 
             // Belleği temizleyelim
+            imagedestroy($newImage);
             imagedestroy($background);
             imagedestroy($uploadedPhoto);
 
