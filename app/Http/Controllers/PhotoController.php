@@ -146,7 +146,7 @@ class PhotoController extends Controller
     // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
     $scaleWidth = $bgWidth / $upWidth;
     $scaleHeight = $bgHeight / $upHeight;
-    $scale = min($scaleWidth, $scaleHeight) * 0.95; // %95 doluluk oranı
+    $scale = min($scaleWidth, $scaleHeight) * 0.65; // %95 doluluk oranı
 
     $newWidth = (int)($upWidth * $scale);
     $newHeight = (int)($upHeight * $scale);
