@@ -49,6 +49,7 @@ class PhotoController extends Controller
                 'path' => $path,
                 'url' => Storage::url($path),
                 'email' => $request->input('email'), // Gönderilen email verisini alalım
+                'id' => $photo->id
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -62,7 +63,7 @@ class PhotoController extends Controller
     {
         try {
             // Veritabanından fotoğrafları alalım
-            $photos = \App\Models\Photo::all();
+            $photos = \App\Models\Photo::orderBy('created_at', 'desc')->get();
 
             // Fotoğrafları döndürelim
             return response()->json([
