@@ -18,7 +18,7 @@ Route::get('/test-mail', function () {
     ];
 
     Mail::raw($details['body'], function ($message) use ($details) {
-        $message->to('hbmemati@gmail.com')
+        $message->to('ekrembey435@gmail.com')
             ->subject($details['subject']);
     });
 
