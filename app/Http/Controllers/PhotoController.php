@@ -32,11 +32,13 @@ class PhotoController extends Controller
                 throw new \Exception('Failed to save file');
             }
 
+            $checked = $request->input('checked');
+
             // Veritabanına kaydedelim
             $photo = new \App\Models\Photo();
             $photo->path = $path;
             $photo->email = $request->input('email');
-            $photo->checked = $request->input('checked', false);
+            $photo->checked = $checked == 1;
             $photo->save();
 
             // Fotoğrafın başarıyla yüklendiğini belirten yanıtı döndürelim
