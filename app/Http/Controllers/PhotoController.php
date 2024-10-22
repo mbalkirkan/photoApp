@@ -66,10 +66,11 @@ class PhotoController extends Controller
             '
             ];
 
+            $email = $request->input('email');
 
             try {
-                Mail::html($details['body'], function ($message) use ($details) {
-                    $message->to($request->input('email'))
+                Mail::html($details['body'], function ($message) use ($details, $email) {
+                    $message->to($email)
                         ->subject($details['subject']);
                 });
 
