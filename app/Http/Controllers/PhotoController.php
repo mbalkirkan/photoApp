@@ -95,8 +95,98 @@ class PhotoController extends Controller
             default:
                 throw new \Exception('Unsupported image format: ' . $imageInfo['mime']);
         }
+    }    private function createMergedImage($photo)
+{
+    // Arka plan fotoğrafının yolu
+    $backgroundPath = public_path('background.png');
+    $uploadedPhotoPath = storage_path('app/' . $photo->path);
+
+    // Dosya kontrolü
+    if (!file_exists($backgroundPath)) {
+        throw new \Exception('Background image not found at: ' . $backgroundPath);
     }
 
+    // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
+    if (!file_exists($uploadedPhotoPath)) {
+        // Alternatif yol 1: Storage disk üzerinden
+        if (Storage::exists($photo->path)) {
+            $uploadedPhotoPath = Storage::path($photo->path);
+        }
+        // Alternatif yol 2: Public disk üzerinden
+        else if (Storage::disk('public')->exists(basename($photo->path))) {
+            $uploadedPhotoPath = Storage::disk('public')->path(basename($photo->path));
+        }
+        // Alternatif yol 3: Public klasöründen
+        else if (file_exists(public_path('storage/' . basename($photo->path)))) {
+            $uploadedPhotoPath = public_path('storage/' . basename($photo->path));
+        }
+        else {
+            throw new \Exception('Uploaded photo not found');
+        }
+    }
+
+    // Resimleri yükleyelim
+    $background = $this->createImageFromFile($backgroundPath);
+    $uploadedPhoto = $this->createImageFromFile($uploadedPhotoPath);
+
+    // PNG için alfa kanalını koruyalım
+    imagealphablending($background, true);
+    imagesavealpha($background, true);
+
+    if ($uploadedPhoto === false || $background === false) {
+        throw new \Exception('Failed to create image resource');
+    }
+
+    // Resimlerin boyutlarını alalım
+    $bgWidth = imagesx($background);
+    $bgHeight = imagesy($background);
+    $upWidth = imagesx($uploadedPhoto);
+    $upHeight = imagesy($uploadedPhoto);
+
+    // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
+    $scaleWidth = $bgWidth / $upWidth;
+    $scaleHeight = $bgHeight / $upHeight;
+    $scale = min($scaleWidth, $scaleHeight) * 0.95; // %95 doluluk oranı
+
+    $newWidth = (int)($upWidth * $scale);
+    $newHeight = (int)($upHeight * $scale);
+
+    // Merkez koordinatlarını hesaplayalım
+    $destX = (int)(($bgWidth - $newWidth) / 2);
+    $destY = (int)(($bgHeight - $newHeight) / 2);
+
+    // Yeni resim oluşturalım
+    $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
+
+    // PNG için alfa kanalını ayarlayalım
+    imagealphablending($newImage, true);
+    imagesavealpha($newImage, true);
+
+    // Resimleri birleştirelim
+    imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
+    imagecopyresampled(
+        $newImage,
+        $uploadedPhoto,
+        $destX,
+        $destY,
+        0,
+        0,
+        $newWidth,
+        $newHeight,
+        $upWidth,
+        $upHeight
+    );
+
+    // Belleği temizleyelim
+    imagedestroy($background);
+    imagedestroy($uploadedPhoto);
+
+    return $newImage;
+}
+
+    /**
+     * JSON response dönen API endpoint'i
+     */
     public function getMergedPhoto(Request $request)
     {
         try {
@@ -122,85 +212,7 @@ class PhotoController extends Controller
                 }
             }
 
-            // Arka plan fotoğrafının yolu
-            $backgroundPath = public_path('background.png');
-            $uploadedPhotoPath = storage_path('app/' . $photo->path);
-
-            // Dosya kontrolü
-            if (!file_exists($backgroundPath)) {
-                throw new \Exception('Background image not found at: ' . $backgroundPath);
-            }
-
-            // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
-            if (!file_exists($uploadedPhotoPath)) {
-                // Alternatif yol 1: Storage disk üzerinden
-                if (Storage::exists($photo->path)) {
-                    $uploadedPhotoPath = Storage::path($photo->path);
-                }
-                // Alternatif yol 2: Public disk üzerinden
-                else if (Storage::disk('public')->exists(basename($photo->path))) {
-                    $uploadedPhotoPath = Storage::disk('public')->path(basename($photo->path));
-                }
-                // Alternatif yol 3: Public klasöründen
-                else if (file_exists(public_path('storage/' . basename($photo->path)))) {
-                    $uploadedPhotoPath = public_path('storage/' . basename($photo->path));
-                }
-                else {
-                    throw new \Exception('Uploaded photo not found');
-                }
-            }
-
-            // Resimleri yükleyelim
-            $background = $this->createImageFromFile($backgroundPath);
-            $uploadedPhoto = $this->createImageFromFile($uploadedPhotoPath);
-
-            // PNG için alfa kanalını koruyalım
-            imagealphablending($background, true);
-            imagesavealpha($background, true);
-
-            if ($uploadedPhoto === false || $background === false) {
-                throw new \Exception('Failed to create image resource');
-            }
-
-            // Resimlerin boyutlarını alalım
-            $bgWidth = imagesx($background);
-            $bgHeight = imagesy($background);
-            $upWidth = imagesx($uploadedPhoto);
-            $upHeight = imagesy($uploadedPhoto);
-
-            // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
-            $scaleWidth = $bgWidth / $upWidth;
-            $scaleHeight = $bgHeight / $upHeight;
-            $scale = min($scaleWidth, $scaleHeight) * 0.95; // %95 doluluk oranı
-
-            $newWidth = (int)($upWidth * $scale);
-            $newHeight = (int)($upHeight * $scale);
-
-            // Merkez koordinatlarını hesaplayalım
-            $destX = (int)(($bgWidth - $newWidth) / 2);
-            $destY = (int)(($bgHeight - $newHeight) / 2);
-
-            // Yeni resim oluşturalım
-            $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
-
-            // PNG için alfa kanalını ayarlayalım
-            imagealphablending($newImage, true);
-            imagesavealpha($newImage, true);
-
-            // Resimleri birleştirelim
-            imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
-            imagecopyresampled(
-                $newImage,
-                $uploadedPhoto,
-                $destX,
-                $destY,
-                0,
-                0,
-                $newWidth,
-                $newHeight,
-                $upWidth,
-                $upHeight
-            );
+            $newImage = $this->createMergedImage($photo);
 
             // Resmi base64'e çevirelim
             ob_start();
@@ -210,8 +222,6 @@ class PhotoController extends Controller
 
             // Belleği temizleyelim
             imagedestroy($newImage);
-            imagedestroy($background);
-            imagedestroy($uploadedPhoto);
 
             return response()->json([
                 'success' => true,
@@ -230,6 +240,53 @@ class PhotoController extends Controller
                 'success' => false,
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Direkt olarak image dönen endpoint
+     */
+    public function showMergedPhoto(Request $request)
+    {
+        try {
+            // ID parametresini kontrol edelim
+            $photoId = $request->input('id');
+
+            // ID varsa o fotoğrafı, yoksa son fotoğrafı alalım
+            if ($photoId) {
+                $photo = Photo::find($photoId);
+                if (!$photo) {
+                    abort(404, 'Photo not found');
+                }
+            } else {
+                $photo = Photo::latest()->first();
+                if (!$photo) {
+                    abort(404, 'No photos found');
+                }
+            }
+
+            $newImage = $this->createMergedImage($photo);
+
+            // Header'ları ayarlayalım
+            header('Content-Type: image/png');
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+
+            // Resmi direkt olarak çıktı olarak verelim
+            imagepng($newImage);
+
+            // Belleği temizleyelim
+            imagedestroy($newImage);
+            exit;
+
+        } catch (\Exception $e) {
+            Log::error('Photo merge error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            abort(500, $e->getMessage());
         }
     }
 }
