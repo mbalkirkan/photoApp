@@ -49,9 +49,9 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url(env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
             'stream' => [
                 'ssl' => [
-                    'allow_self_signed' => true,
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,  // Self-signed sertifikalar için
+                    'verify_peer' => false,       // Sertifika doğrulamasını kapatır
+                    'verify_peer_name' => false,  // Sertifika ismini doğrulamaz
                 ],
             ],
         ],
