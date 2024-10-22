@@ -6,7 +6,8 @@ use App\Models\Photo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-
+//Xu4k5z6_9
+//gladiators@mbalkirkan.com
 class PhotoController extends Controller
 {
     public function upload(Request $request)
