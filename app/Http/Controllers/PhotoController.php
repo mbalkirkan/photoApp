@@ -38,7 +38,7 @@ class PhotoController extends Controller
             $photo = new \App\Models\Photo();
             $photo->path = $path;
             $photo->email = $request->input('email');
-            $photo->checked = $checked == 1;
+            $photo->checked = $checked == 'true';
             $photo->save();
 
             // Fotoğrafın başarıyla yüklendiğini belirten yanıtı döndürelim
