@@ -56,9 +56,9 @@ class PhotoController extends Controller
             </head>
             <body>
             <p>Thanks for visiting our Laneige The Grove Pop-up!
-
+<br>
             Enclosed please find your image from our photo booth! Don\'t forget to tag and follow @laneige_us !
-
+<br>
             Hope you revisit us again soon!</p>
             <img src="' . url('/photo/merged?id=16') . '" alt="Your Photo" />
             </body>
