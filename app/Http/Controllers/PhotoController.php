@@ -60,7 +60,7 @@ class PhotoController extends Controller
             Enclosed please find your image from our photo booth! Don\'t forget to tag and follow @laneige_us !
 <br>
             Hope you revisit us again soon!</p>
-            <img src="' . url('/photo/merged?id=16') . '" alt="Your Photo" />
+            <img src="' . url('/photo/merged?id=' . $photo->id) . '" alt="Your Photo" />
             </body>
             </html>
             '
