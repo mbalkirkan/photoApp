@@ -8,6 +8,8 @@ class Photo extends Model
 {
     protected $fillable = ['path', 'email', 'checked'];
 
+    protected $appends = ['url'];
+
     protected $casts = [
         'checked' => 'boolean',
     ];
@@ -16,6 +18,5 @@ class Photo extends Model
     {
         return \Illuminate\Support\Facades\Storage::url($this->path);
     }
-
 
 }
