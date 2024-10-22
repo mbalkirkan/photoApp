@@ -111,17 +111,30 @@ class PhotoController extends Controller
             }
 
             // Arka plan fotoğrafının yolu
-            $backgroundPath = public_path('background.png'); // PNG olarak değiştirildi
+            $backgroundPath = public_path('background.png');
 
             // Dosyaların var olduğunu kontrol edelim
             if (!file_exists($backgroundPath)) {
                 throw new \Exception('Background image not found');
             }
 
-            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
-            if (!file_exists($uploadedPhotoPath)) {
-                throw new \Exception('Uploaded photo not found');
+            // Veritabanındaki yolu düzeltelim
+            // "public/photos/filename.jpg" -> "photos/filename.jpg"
+            $storagePath = str_replace('public/', '', $lastPhoto->path);
+
+            // Storage facade ile tam dosya yolunu alalım
+            $uploadedPhotoPath = Storage::path($storagePath);
+
+            if (!Storage::exists($storagePath)) {
+                throw new \Exception('Uploaded photo not found at path: ' . $storagePath);
             }
+
+            // Debug bilgisi ekleyelim
+            \Log::info('Photo paths:', [
+                'storage_path' => $storagePath,
+                'full_path' => $uploadedPhotoPath,
+                'exists' => Storage::exists($storagePath)
+            ]);
 
             // Resimleri yükleyelim
             $background = $this->createImageFromFile($backgroundPath);
@@ -175,10 +188,10 @@ class PhotoController extends Controller
 
             // Yeni resmi kaydedelim
             $newFileName = 'merged_' . time() . '.png';
-            $newFilePath = storage_path('app/public/photos/' . $newFileName);
+            $newFilePath = Storage::path('public/photos/' . $newFileName);
 
             // PNG olarak kaydedelim
-            imagepng($newImage, $newFilePath, 9); // 9 = en iyi sıkıştırma
+            imagepng($newImage, $newFilePath, 9);
 
             // Belleği temizleyelim
             imagedestroy($newImage);
@@ -188,13 +201,25 @@ class PhotoController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Photo merged successfully',
-                'url' => Storage::url('photos/' . $newFileName)
+                'url' => Storage::url('photos/' . $newFileName),
+                'debug' => [
+                    'original_path' => $lastPhoto->path,
+                    'storage_path' => $storagePath,
+                    'full_path' => $uploadedPhotoPath
+                ]
             ]);
 
         } catch (\Exception $e) {
+            // Hata durumunda debug bilgisi ekleyelim
+            \Log::error('Photo merge error:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
+                'debug_trace' => $e->getTraceAsString()
             ], 500);
         }
     }
