@@ -74,4 +74,94 @@ class PhotoController extends Controller
             ], 500);
         }
     }
+
+    public function getLastPhotoMerged()
+    {
+        try {
+            // Son yüklenen fotoğrafı alalım
+            $lastPhoto = Photo::latest()->first();
+
+            if (!$lastPhoto) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No photos found'
+                ], 404);
+            }
+
+            // Arka plan fotoğrafının yolu
+            $backgroundPath = public_path('background.png'); // background.jpg'yi public klasörüne koymalısınız
+
+            // Son yüklenen fotoğrafın yolu
+            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
+
+            // Arka plan resmini yükleyelim
+            $background = imagecreatefromjpeg($backgroundPath);
+
+            // Yüklenen fotoğrafı yükleyelim (uzantıya göre)
+            $extension = pathinfo($uploadedPhotoPath, PATHINFO_EXTENSION);
+            $uploadedPhoto = null;
+
+            switch(strtolower($extension)) {
+                case 'jpg':
+                case 'jpeg':
+                    $uploadedPhoto = imagecreatefromjpeg($uploadedPhotoPath);
+                    break;
+                case 'png':
+                    $uploadedPhoto = imagecreatefrompng($uploadedPhotoPath);
+                    break;
+                default:
+                    throw new \Exception('Unsupported image format');
+            }
+
+            // Resimlerin boyutlarını alalım
+            $bgWidth = imagesx($background);
+            $bgHeight = imagesy($background);
+            $upWidth = imagesx($uploadedPhoto);
+            $upHeight = imagesy($uploadedPhoto);
+
+            // Yüklenen fotoğrafı %70 oranında küçültelim
+            $newWidth = $upWidth * 0.7;
+            $newHeight = $upHeight * 0.7;
+
+            // Merkez koordinatlarını hesaplayalım
+            $destX = ($bgWidth - $newWidth) / 2;
+            $destY = ($bgHeight - $newHeight) / 2;
+
+            // Resimleri birleştirelim
+            imagecopyresampled(
+                $background,
+                $uploadedPhoto,
+                $destX,
+                $destY,
+                0,
+                0,
+                $newWidth,
+                $newHeight,
+                $upWidth,
+                $upHeight
+            );
+
+            // Yeni resmi kaydedelim
+            $newFileName = 'merged_' . time() . '.jpg';
+            $newFilePath = storage_path('app/public/photos/' . $newFileName);
+
+            imagejpeg($background, $newFilePath, 90);
+
+            // Belleği temizleyelim
+            imagedestroy($background);
+            imagedestroy($uploadedPhoto);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Photo merged successfully',
+                'url' => Storage::url('photos/' . $newFileName)
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
