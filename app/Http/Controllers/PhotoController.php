@@ -110,25 +110,16 @@ class PhotoController extends Controller
                 ], 404);
             }
 
-            // Debug için dosya yollarını loglayalım
-            \Log::info('Processing paths', [
-                'original_path' => $lastPhoto->path,
-                'storage_path' => storage_path(),
-                'public_path' => public_path(),
-            ]);
-
             // Arka plan fotoğrafının yolu
             $backgroundPath = public_path('background.png');
+            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
 
-            // Dosyaların var olduğunu kontrol edelim
+            // Dosya kontrolü
             if (!file_exists($backgroundPath)) {
                 throw new \Exception('Background image not found at: ' . $backgroundPath);
             }
 
-            // Yüklenen fotoğrafın yolunu düzenleyelim
-            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
-
-            // Dosyanın varlığını kontrol edelim ve alternatif yolları deneyelim
+            // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
             if (!file_exists($uploadedPhotoPath)) {
                 // Alternatif yol 1: Storage disk üzerinden
                 if (Storage::exists($lastPhoto->path)) {
@@ -143,19 +134,9 @@ class PhotoController extends Controller
                     $uploadedPhotoPath = public_path('storage/' . basename($lastPhoto->path));
                 }
                 else {
-                    throw new \Exception('Uploaded photo not found. Tried paths: ' .
-                        json_encode([
-                            'original' => $uploadedPhotoPath,
-                            'storage' => Storage::path($lastPhoto->path),
-                            'public_storage' => Storage::disk('public')->path(basename($lastPhoto->path)),
-                            'public' => public_path('storage/' . basename($lastPhoto->path))
-                        ])
-                    );
+                    throw new \Exception('Uploaded photo not found');
                 }
             }
-
-            // Debug için bulunan dosya yolunu loglayalım
-            \Log::info('Found photo at path', ['path' => $uploadedPhotoPath]);
 
             // Resimleri yükleyelim
             $background = $this->createImageFromFile($backgroundPath);
@@ -175,25 +156,27 @@ class PhotoController extends Controller
             $upWidth = imagesx($uploadedPhoto);
             $upHeight = imagesy($uploadedPhoto);
 
-            // Yüklenen fotoğrafı %70 oranında küçültelim
-            $newWidth = (int)($upWidth * 0.7);
-            $newHeight = (int)($upHeight * 0.7);
+            // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
+            $scaleWidth = $bgWidth / $upWidth;
+            $scaleHeight = $bgHeight / $upHeight;
+            $scale = min($scaleWidth, $scaleHeight) * 0.95; // %95 doluluk oranı
+
+            $newWidth = (int)($upWidth * $scale);
+            $newHeight = (int)($upHeight * $scale);
 
             // Merkez koordinatlarını hesaplayalım
             $destX = (int)(($bgWidth - $newWidth) / 2);
             $destY = (int)(($bgHeight - $newHeight) / 2);
 
-            // Yeni boş resim oluşturalım
+            // Yeni resim oluşturalım
             $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
 
             // PNG için alfa kanalını ayarlayalım
             imagealphablending($newImage, true);
             imagesavealpha($newImage, true);
 
-            // Arka planı yeni resme kopyalayalım
+            // Resimleri birleştirelim
             imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
-
-            // Yüklenen fotoğrafı arka planın üzerine yerleştirelim
             imagecopyresampled(
                 $newImage,
                 $uploadedPhoto,
@@ -207,13 +190,19 @@ class PhotoController extends Controller
                 $upHeight
             );
 
+            // Önceki birleştirilmiş fotoğrafları temizleyelim
+            $oldFiles = glob(public_path('storage/photos/merged_*.png'));
+            foreach ($oldFiles as $file) {
+                if (file_exists($file)) {
+                    unlink($file);
+                }
+            }
+
             // Yeni resmi kaydedelim
             $newFileName = 'merged_' . time() . '.png';
-
-            // Yeni resmi public/storage altına kaydedelim
             $newFilePath = public_path('storage/photos/' . $newFileName);
 
-            // Klasörün var olduğundan emin olalım
+            // Klasör kontrolü
             if (!file_exists(dirname($newFilePath))) {
                 mkdir(dirname($newFilePath), 0755, true);
             }
@@ -229,12 +218,7 @@ class PhotoController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Photo merged successfully',
-                'url' => asset('storage/photos/' . $newFileName),
-                'debug' => [
-                    'original_path' => $lastPhoto->path,
-                    'used_path' => $uploadedPhotoPath,
-                    'new_path' => $newFilePath
-                ]
+                'url' => asset('storage/photos/' . $newFileName)
             ]);
 
         } catch (\Exception $e) {
@@ -245,8 +229,7 @@ class PhotoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-                'debug_trace' => $e->getTraceAsString()
+                'message' => $e->getMessage()
             ], 500);
         }
     }
