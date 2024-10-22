@@ -97,22 +97,34 @@ class PhotoController extends Controller
         }
     }
 
-    public function getLastPhotoMerged()
+    public function getMergedPhoto(Request $request)
     {
         try {
-            // Son yüklenen fotoğrafı alalım
-            $lastPhoto = Photo::latest()->first();
+            // ID parametresini kontrol edelim
+            $photoId = $request->input('id');
 
-            if (!$lastPhoto) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No photos found'
-                ], 404);
+            // ID varsa o fotoğrafı, yoksa son fotoğrafı alalım
+            if ($photoId) {
+                $photo = Photo::find($photoId);
+                if (!$photo) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Photo not found with ID: ' . $photoId
+                    ], 404);
+                }
+            } else {
+                $photo = Photo::latest()->first();
+                if (!$photo) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No photos found'
+                    ], 404);
+                }
             }
 
             // Arka plan fotoğrafının yolu
             $backgroundPath = public_path('background.png');
-            $uploadedPhotoPath = storage_path('app/' . $lastPhoto->path);
+            $uploadedPhotoPath = storage_path('app/' . $photo->path);
 
             // Dosya kontrolü
             if (!file_exists($backgroundPath)) {
@@ -122,16 +134,16 @@ class PhotoController extends Controller
             // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
             if (!file_exists($uploadedPhotoPath)) {
                 // Alternatif yol 1: Storage disk üzerinden
-                if (Storage::exists($lastPhoto->path)) {
-                    $uploadedPhotoPath = Storage::path($lastPhoto->path);
+                if (Storage::exists($photo->path)) {
+                    $uploadedPhotoPath = Storage::path($photo->path);
                 }
                 // Alternatif yol 2: Public disk üzerinden
-                else if (Storage::disk('public')->exists(basename($lastPhoto->path))) {
-                    $uploadedPhotoPath = Storage::disk('public')->path(basename($lastPhoto->path));
+                else if (Storage::disk('public')->exists(basename($photo->path))) {
+                    $uploadedPhotoPath = Storage::disk('public')->path(basename($photo->path));
                 }
                 // Alternatif yol 3: Public klasöründen
-                else if (file_exists(public_path('storage/' . basename($lastPhoto->path)))) {
-                    $uploadedPhotoPath = public_path('storage/' . basename($lastPhoto->path));
+                else if (file_exists(public_path('storage/' . basename($photo->path)))) {
+                    $uploadedPhotoPath = public_path('storage/' . basename($photo->path));
                 }
                 else {
                     throw new \Exception('Uploaded photo not found');
@@ -190,25 +202,11 @@ class PhotoController extends Controller
                 $upHeight
             );
 
-            // Önceki birleştirilmiş fotoğrafları temizleyelim
-            $oldFiles = glob(public_path('storage/photos/merged_*.png'));
-            foreach ($oldFiles as $file) {
-                if (file_exists($file)) {
-                    unlink($file);
-                }
-            }
-
-            // Yeni resmi kaydedelim
-            $newFileName = 'merged_' . time() . '.png';
-            $newFilePath = public_path('storage/photos/' . $newFileName);
-
-            // Klasör kontrolü
-            if (!file_exists(dirname($newFilePath))) {
-                mkdir(dirname($newFilePath), 0755, true);
-            }
-
-            // PNG olarak kaydedelim
-            imagepng($newImage, $newFilePath, 9);
+            // Resmi base64'e çevirelim
+            ob_start();
+            imagepng($newImage);
+            $imageData = ob_get_clean();
+            $base64Image = base64_encode($imageData);
 
             // Belleği temizleyelim
             imagedestroy($newImage);
@@ -218,7 +216,8 @@ class PhotoController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Photo merged successfully',
-                'url' => asset('storage/photos/' . $newFileName)
+                'image' => 'data:image/png;base64,' . $base64Image,
+                'photo_id' => $photo->id
             ]);
 
         } catch (\Exception $e) {
