@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Photo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+
 //Xu4k5z6_9
 //gladiators@mbalkirkan.com
 class PhotoController extends Controller
@@ -42,6 +44,47 @@ class PhotoController extends Controller
             $photo->email = $request->input('email');
             $photo->checked = $checked == 'true';
             $photo->save();
+
+            // mail olarak fotoğrafı ortalanmış şekilde gönderelim
+
+            $details = [
+                'subject' => 'Your Photo from Laneige The Grove Pop-up!',
+                'body' => '
+                <html>
+                <head>
+                <title>Your Photo from Laneige The Grove Pop-up!</title>
+                </head>
+                <body>
+                <p>Thanks for visiting our Laneige The Grove Pop-up!
+
+Enclosed please find your image from our photo booth!  Don\'t forget to tag and follow @laneige_us !
+
+            Hope you revisit us again soon!</p>
+                <img src="' . url('/photo/merged?id=' . $photo->id) . '" alt="Your Photo" />
+                </body>
+                </html>
+                '
+            ];
+
+            try {
+                Mail::send([], [], function ($message) use ($details) {
+                    $message->to($details['email'])
+                        ->subject($details['subject'])
+                        ->setBody($details['body'], 'text/html');
+                });
+            } catch (\Exception $e) {
+                Log::error('Mail error:', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+//
+//            Mail::raw($details['body'], function ($message) use ($details) {
+//                $message->to('ekrembey435@gmail.com')
+//                    ->subject($details['subject']);
+//            });
+
+
 
             // Fotoğrafın başarıyla yüklendiğini belirten yanıtı döndürelim
             return response()->json([
@@ -97,94 +140,93 @@ class PhotoController extends Controller
             default:
                 throw new \Exception('Unsupported image format: ' . $imageInfo['mime']);
         }
-    }    private function createMergedImage($photo)
-{
-    // Arka plan fotoğrafının yolu
-    $backgroundPath = public_path('background.png');
-    $uploadedPhotoPath = storage_path('app/' . $photo->path);
-
-    // Dosya kontrolü
-    if (!file_exists($backgroundPath)) {
-        throw new \Exception('Background image not found at: ' . $backgroundPath);
     }
 
-    // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
-    if (!file_exists($uploadedPhotoPath)) {
-        // Alternatif yol 1: Storage disk üzerinden
-        if (Storage::exists($photo->path)) {
-            $uploadedPhotoPath = Storage::path($photo->path);
+    private function createMergedImage($photo)
+    {
+        // Arka plan fotoğrafının yolu
+        $backgroundPath = public_path('background.png');
+        $uploadedPhotoPath = storage_path('app/' . $photo->path);
+
+        // Dosya kontrolü
+        if (!file_exists($backgroundPath)) {
+            throw new \Exception('Background image not found at: ' . $backgroundPath);
         }
-        // Alternatif yol 2: Public disk üzerinden
-        else if (Storage::disk('public')->exists(basename($photo->path))) {
-            $uploadedPhotoPath = Storage::disk('public')->path(basename($photo->path));
+
+        // Yüklenen fotoğrafın varlığını kontrol edelim ve alternatif yolları deneyelim
+        if (!file_exists($uploadedPhotoPath)) {
+            // Alternatif yol 1: Storage disk üzerinden
+            if (Storage::exists($photo->path)) {
+                $uploadedPhotoPath = Storage::path($photo->path);
+            } // Alternatif yol 2: Public disk üzerinden
+            else if (Storage::disk('public')->exists(basename($photo->path))) {
+                $uploadedPhotoPath = Storage::disk('public')->path(basename($photo->path));
+            } // Alternatif yol 3: Public klasöründen
+            else if (file_exists(public_path('storage/' . basename($photo->path)))) {
+                $uploadedPhotoPath = public_path('storage/' . basename($photo->path));
+            } else {
+                throw new \Exception('Uploaded photo not found');
+            }
         }
-        // Alternatif yol 3: Public klasöründen
-        else if (file_exists(public_path('storage/' . basename($photo->path)))) {
-            $uploadedPhotoPath = public_path('storage/' . basename($photo->path));
+
+        // Resimleri yükleyelim
+        $background = $this->createImageFromFile($backgroundPath);
+        $uploadedPhoto = $this->createImageFromFile($uploadedPhotoPath);
+
+        // PNG için alfa kanalını koruyalım
+        imagealphablending($background, true);
+        imagesavealpha($background, true);
+
+        if ($uploadedPhoto === false || $background === false) {
+            throw new \Exception('Failed to create image resource');
         }
-        else {
-            throw new \Exception('Uploaded photo not found');
-        }
+
+        // Resimlerin boyutlarını alalım
+        $bgWidth = imagesx($background);
+        $bgHeight = imagesy($background);
+        $upWidth = imagesx($uploadedPhoto);
+        $upHeight = imagesy($uploadedPhoto);
+
+        // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
+        $scaleWidth = $bgWidth / $upWidth;
+        $scaleHeight = $bgHeight / $upHeight;
+        $scale = min($scaleWidth, $scaleHeight) * 0.65; // %95 doluluk oranı
+
+        $newWidth = (int)($upWidth * $scale);
+        $newHeight = (int)($upHeight * $scale);
+
+        // Merkez koordinatlarını hesaplayalım
+        $destX = (int)(($bgWidth - $newWidth) / 2);
+        $destY = (int)(($bgHeight - $newHeight) / 2);
+
+        // Yeni resim oluşturalım
+        $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
+
+        // PNG için alfa kanalını ayarlayalım
+        imagealphablending($newImage, true);
+        imagesavealpha($newImage, true);
+
+        // Resimleri birleştirelim
+        imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
+        imagecopyresampled(
+            $newImage,
+            $uploadedPhoto,
+            $destX,
+            $destY,
+            0,
+            0,
+            $newWidth,
+            $newHeight,
+            $upWidth,
+            $upHeight
+        );
+
+        // Belleği temizleyelim
+        imagedestroy($background);
+        imagedestroy($uploadedPhoto);
+
+        return $newImage;
     }
-
-    // Resimleri yükleyelim
-    $background = $this->createImageFromFile($backgroundPath);
-    $uploadedPhoto = $this->createImageFromFile($uploadedPhotoPath);
-
-    // PNG için alfa kanalını koruyalım
-    imagealphablending($background, true);
-    imagesavealpha($background, true);
-
-    if ($uploadedPhoto === false || $background === false) {
-        throw new \Exception('Failed to create image resource');
-    }
-
-    // Resimlerin boyutlarını alalım
-    $bgWidth = imagesx($background);
-    $bgHeight = imagesy($background);
-    $upWidth = imagesx($uploadedPhoto);
-    $upHeight = imagesy($uploadedPhoto);
-
-    // Beyaz alana tam sığması için en-boy oranını koruyarak yeni boyutları hesaplayalım
-    $scaleWidth = $bgWidth / $upWidth;
-    $scaleHeight = $bgHeight / $upHeight;
-    $scale = min($scaleWidth, $scaleHeight) * 0.65; // %95 doluluk oranı
-
-    $newWidth = (int)($upWidth * $scale);
-    $newHeight = (int)($upHeight * $scale);
-
-    // Merkez koordinatlarını hesaplayalım
-    $destX = (int)(($bgWidth - $newWidth) / 2);
-    $destY = (int)(($bgHeight - $newHeight) / 2);
-
-    // Yeni resim oluşturalım
-    $newImage = imagecreatetruecolor($bgWidth, $bgHeight);
-
-    // PNG için alfa kanalını ayarlayalım
-    imagealphablending($newImage, true);
-    imagesavealpha($newImage, true);
-
-    // Resimleri birleştirelim
-    imagecopy($newImage, $background, 0, 0, 0, 0, $bgWidth, $bgHeight);
-    imagecopyresampled(
-        $newImage,
-        $uploadedPhoto,
-        $destX,
-        $destY,
-        0,
-        0,
-        $newWidth,
-        $newHeight,
-        $upWidth,
-        $upHeight
-    );
-
-    // Belleği temizleyelim
-    imagedestroy($background);
-    imagedestroy($uploadedPhoto);
-
-    return $newImage;
-}
 
     /**
      * JSON response dönen API endpoint'i
