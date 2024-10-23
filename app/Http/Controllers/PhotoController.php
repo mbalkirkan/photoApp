@@ -68,18 +68,18 @@ class PhotoController extends Controller
 
             $email = $request->input('email');
 
-            try {
-                Mail::html($details['body'], function ($message) use ($details, $email) {
-                    $message->to($email)
-                        ->subject($details['subject']);
-                });
-
-            } catch (\Exception $e) {
-                Log::error('Mail error:', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-            }
+//            try {
+//                Mail::html($details['body'], function ($message) use ($details, $email) {
+//                    $message->to($email)
+//                        ->subject($details['subject']);
+//                });
+//
+//            } catch (\Exception $e) {
+//                Log::error('Mail error:', [
+//                    'error' => $e->getMessage(),
+//                    'trace' => $e->getTraceAsString()
+//                ]);
+//            }
 //
 //            Mail::raw($details['body'], function ($message) use ($details) {
 //                $message->to('ekrembey435@gmail.com')
