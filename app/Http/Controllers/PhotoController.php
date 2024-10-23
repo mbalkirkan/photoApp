@@ -55,11 +55,11 @@ class PhotoController extends Controller
             <title>Your Photo from Laneige The Grove Pop-up!</title>
             </head>
             <body>
-            <p>Thanks for visiting our Laneige The Grove Pop-up!
+            <p>Thanks for visiting Laneige The Grove Pop-up!
+            <br>
+Here is your image from our photo booth. Don\'t forget to tag and follow @laneige_us.
 <br>
-            Enclosed please find your image from our photo booth! Don\'t forget to tag and follow @laneige_us !
-<br>
-            Hope you revisit us again soon!</p>
+            Hope you visit us again soon!</p>
             <img src="' . url('/photo/merged?id=' . $photo->id) . '" alt="Your Photo" />
             </body>
             </html>
