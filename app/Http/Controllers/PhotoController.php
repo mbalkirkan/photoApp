@@ -108,7 +108,10 @@ Here is your image from our photo booth. Don\'t forget to tag and follow @laneig
     {
         try {
             // Veritabanından fotoğrafları alalım
-            $photos = \App\Models\Photo::orderBy('created_at', 'desc')->get();
+            $photos = \App\Models\Photo::
+            where('id', '>', 48)
+                ->
+            orderBy('created_at', 'desc')->get();
 
             // Fotoğrafları döndürelim
             return response()->json([
