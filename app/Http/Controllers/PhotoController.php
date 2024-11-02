@@ -136,9 +136,18 @@ Here is your image from our photo booth. Don\'t forget to tag and follow @laneig
                 ->orderBy('created_at', 'desc')
                 ->select('email', 'created_at', 'checked')
                 ->get();
+
+            $mail_list = [];
+            foreach ($mails as $mail) {
+                $mail_list[] = [
+                    'email' => $mail->email,
+                    'created_at' => $mail->created_at->format('d.m.Y H:i'),
+                    'checked' => $mail->checked
+                ];
+            }
             return response()->json([
                 'success' => true,
-                'mails' => $mails
+                'mails' => $mail_list
             ]);
         } catch (\Exception $e) {
             return response()->json([
