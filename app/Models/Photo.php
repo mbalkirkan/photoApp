@@ -19,4 +19,10 @@ class Photo extends Model
         return \Illuminate\Support\Facades\Storage::url($this->path);
     }
 
+    // created at format
+    public function getCreatedAtAttribute($value)
+    {
+        return \Carbon\Carbon::parse($value)->format('d.m.Y H:i');
+    }
+
 }
