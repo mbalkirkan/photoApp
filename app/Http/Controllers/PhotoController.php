@@ -126,6 +126,28 @@ Here is your image from our photo booth. Don\'t forget to tag and follow @laneig
         }
     }
 
+    public function last_week(Request $request)
+    {
+        try {
+            // son 1 haftadaki checked true olan mail adreslerini alalım
+            $mails = \App\Models\Photo::
+            where('checked', true)
+                ->where('created_at', '>=', now()->subWeek())
+                ->orderBy('created_at', 'desc')
+                ->select('email', 'created_at', 'checked')
+                ->get();
+            return response()->json([
+                'success' => true,
+                'mails' => $mails
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function createImageFromFile($filePath)
     {
         // Dosya tipini kontrol et
